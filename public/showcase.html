@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Витрина — Библиотека Akeront</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { background-color: #f7fafc; color: #2d3748; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px 12px; }
+      .container { max-width: 880px; margin: 0 auto; }
+      header { text-align: center; margin-bottom: 32px; padding: 10px 0; }
+      h1 { margin: 0 0 8px 0; color: #1a202c; font-size: 2rem; font-weight: 700; }
+      .subtitle { color: #718096; font-size: 1rem; }
+      #loading { text-align: center; color: #718096; padding: 50px; font-size: 1.05rem; }
+      .catalog-list { display: flex; flex-direction: column; gap: 20px; }
+      .work-card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04); display: flex; flex-direction: row; overflow: hidden; transition: transform 0.2s ease; }
+      .work-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); }
+      .work-cover { width: 190px; min-width: 190px; background-color: #edf2f7; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      .work-cover img { width: 100%; height: 100%; object-fit: cover; }
+      .work-cover-placeholder { font-size: 3rem; color: #a0aec0; }
+      .work-details { padding: 20px 24px; display: flex; flex-direction: column; flex-grow: 1; justify-content: space-between; }
+      .work-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+      .work-title { font-size: 1.3rem; font-weight: 700; margin: 0; color: #1a202c; }
+      .work-date { font-size: 0.8rem; background: #edf2f7; color: #4a5568; padding: 4px 10px; border-radius: 6px; white-space: nowrap; font-weight: 500; }
+      .work-desc { font-size: 0.92rem; color: #4a5568; line-height: 1.55; margin-bottom: 18px; white-space: pre-wrap; max-height: 120px; overflow-y: auto; }
+      .format-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; }
+      .btn-format { background-color: #2b6cb0; color: #ffffff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+      .btn-format:hover { background-color: #2c5282; }
+      @media (max-width: 640px) { .work-card { flex-direction: column; } .work-cover { width: 100%; min-width: 100%; height: 240px; } }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Библиотека Akeront</h1>
+        <div class="subtitle">Авторская проза и исследования — Каталог произведений</div>
+      </header>
+
+      <div id="loading">Загрузка каталога произведений...</div>
+      <div id="catalog" class="catalog-list"></div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async function() {
+        try {
+          const res = await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'getShowcaseCatalog' })
+          });
+          const items = await res.json();
+          renderCatalog(items);
+        } catch (err) {
+          document.getElementById('loading').innerText = 'Ошибка загрузки каталога: ' + err.message;
+        }
+      });
+
+      function renderCatalog(items) {
+        const loadingElem = document.getElementById('loading');
+        if (loadingElem) loadingElem.style.display = 'none';
+
+        const container = document.getElementById('catalog');
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!items || items.length === 0) {
+          container.innerHTML = '<p style="text-align:center; padding: 40px; color: #718096;">Каталог пока пуст.</p>';
+          return;
+        }
+
+        items.forEach(function(item) {
+          const card = document.createElement('div');
+          card.className = 'work-card';
+
+          const coverHtml = item.coverUrl
+            ? '<div class="work-cover"><img src="' + item.coverUrl + '" alt="' + escapeHtml(item.title) + '"></div>'
+            : '<div class="work-cover"><div class="work-cover-placeholder">📖</div></div>';
+
+          let buttonsHtml = '<div class="format-buttons">';
+          if (item.formats && item.formats.length > 0) {
+            item.formats.forEach(function(fmt) {
+              buttonsHtml += '<button class="btn-format" onclick="openReaderAuth(\'' + fmt.driveId + '\', \'' + escapeHtml(fmt.title) + '\')">' +
+                fmt.icon + ' ' + escapeHtml(fmt.label) +
+                '</button>';
+            });
+          } else {
+            buttonsHtml += '<button class="btn-format" onclick="openReaderAuth(\'' + item.slug + '\', \'' + escapeHtml(item.title) + '\')">✉️ Запросить доступ</button>';
+          }
+          buttonsHtml += '</div>';
+
+          const dateStr = item.uploadDate || '';
+
+          card.innerHTML = coverHtml +
+            '<div class="work-details">' +
+              '<div>' +
+                '<div class="work-header">' +
+                  '<h2 class="work-title">' + escapeHtml(item.title) + '</h2>' +
+                  (dateStr ? '<span class="work-date">📅 ' + escapeHtml(dateStr) + '</span>' : '') +
+                '</div>' +
+                '<div class="work-desc">' + escapeHtml(item.description) + '</div>' +
+              '</div>' +
+              buttonsHtml +
+            '</div>';
+
+          container.appendChild(card);
+        });
+      }
+
+      function openReaderAuth(driveId, title) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tgId = urlParams.get('tg_id') || urlParams.get('tgId') || '';
+        
+        let url = '/index.html?book_id=' + encodeURIComponent(driveId) + '&title=' + encodeURIComponent(title || '');
+        if (tgId) {
+          url += '&tg_id=' + encodeURIComponent(tgId);
+        }
+        window.location.href = url;
+      }
+
+      function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/[&<>"']/g, function(m) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+      }
+    </script>
+  </body>
+</html>
