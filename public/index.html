@@ -1,380 +1,111 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Akeront Library</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Читальня — Akeront</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
-    * { box-sizing: border-box; }
-    body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #121212; color: #e0e0e0; user-select: none; }
-    .container { max-width: 480px; margin: 40px auto; padding: 24px; background: #1e1e1e; border-radius: 12px; border: 1px solid #2d2d2d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-    h2 { margin-top: 0; color: #ffffff; font-size: 20px; font-weight: 600; text-align: center; }
-    p { font-size: 14px; color: #a0a0a0; line-height: 1.5; text-align: center; }
-    input { width: 100%; padding: 12px 16px; margin: 12px 0; background: #2a2a2a; border: 1px solid #3d3d3d; border-radius: 8px; color: #fff; font-size: 15px; outline: none; }
-    button { width: 100%; padding: 12px; background: #0088cc; color: #ffffff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #0077b3; }
-    button:disabled { background: #444; cursor: not-allowed; }
-    .hidden { display: none !important; }
-    .status { margin-top: 10px; font-size: 13px; color: #ff5555; text-align: center; }
-    .book-card { background: #262626; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-    .book-info { flex-grow: 1; padding-right: 12px; }
-    .book-title { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-    .book-meta { font-size: 12px; color: #777; }
-    .read-btn { width: auto; padding: 8px 16px; font-size: 13px; }
-    #readerBlock { width: 100%; height: 100vh; display: flex; flex-direction: column; background: #1a1a1a; }
-    .reader-header { height: 50px; background: #121212; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #2d2d2d; }
-    .back-btn { width: auto; padding: 6px 14px; background: #333; font-size: 13px; }
-    #iframeContainer { flex: 1; width: 100%; height: calc(100vh - 50px); }
-    iframe { width: 100%; height: 100%; border: none; }
+    /* Блокировка выделения текста */
+    * { -webkit-user-select: none; -moz-user-select: none; ms-user-select: none; user-select: none; }
+    body { background: #111827; color: white; font-family: sans-serif; margin: 0; padding: 0; }
+    
+    /* Форма авторизации */
+    #auth-screen { max-width: 400px; margin: 80px auto; padding: 30px; background: #1f2937; border-radius: 12px; text-align: center; }
+    input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #374151; background: #111827; color: white; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    
+    /* Холст ридера */
+    #reader-screen { display: none; flex-direction: column; align-items: center; padding: 20px; }
+    canvas { background: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 100%; }
   </style>
 </head>
-<body oncontextmenu="return false;">
+<body>
 
-  <div id="loaderBlock" class="container hidden">
-    <h2>Вход в читальный зал...</h2>
-    <p>Проверяем доступы и загружаем вашу библиотеку</p>
-  </div>
-
-  <div id="authBlock" class="container">
-    <h2>Цифровая Библиотека</h2>
-    <div id="stepEmail">
-      <p>Введите Email, указанный при покупке или получении доступа:</p>
-      <input type="email" id="emailInput" placeholder="example@gmail.com">
-      <button id="sendBtn" onclick="requestOtp()">Получить код доступа</button>
+  <!-- Авторизация -->
+  <div id="auth-screen">
+    <h2>Цифровая Читальня</h2>
+    <p style="font-size:0.9rem; color:#9ca3af;">Введите Email для получения кода доступа:</p>
+    
+    <input type="email" id="email" placeholder="your@email.com">
+    <button onclick="requestCode()">Запросить код</button>
+    
+    <div id="code-block" style="display:none; margin-top: 15px;">
+      <input type="text" id="code" placeholder="6-значный код">
+      <button onclick="verifyCode()" style="background:#10b981;">Войти в читальню</button>
     </div>
-    <div id="stepCode" class="hidden">
-      <p>Код подтверждения отправлен на вашу почту:</p>
-      <input type="text" id="codeInput" placeholder="____" maxlength="6">
-      <button id="verifyBtn" onclick="confirmOtp()">Войти в библиотеку</button>
-    </div>
-    <div id="statusMsg" class="status"></div>
+    <p id="status" style="font-size:0.85rem; color:#f87171; margin-top:10px;"></p>
   </div>
 
-  <div id="libraryBlock" class="container hidden">
-    <h2>Ваш Читальный Зал</h2>
-    <div id="booksList"></div>
-    <button onclick="logout()" style="background: #333; margin-top: 15px;">Выйти из аккаунта</button>
+  <!-- Ридер -->
+  <div id="reader-screen">
+    <div id="canvas-container"></div>
   </div>
 
-  <div id="readerBlock" class="hidden">
-    <div class="reader-header">
-      <button class="back-btn" onclick="closeReader()">← К списку книг</button>
-    </div>
-    <div id="iframeContainer"></div>
-  </div>
-
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const serverTgId = urlParams.get('tg_id') || urlParams.get('tgId') || '';
-    const serverEmail = urlParams.get('email') || '';
-    const serverBookId = urlParams.get('book_id') || urlParams.get('book_slug') || '';
-    const serverBookTitle = urlParams.get('title') || '';
-    let currentIdentifier = '';
-
-    async function callApi(action, data = {}) {
-      const res = await fetch('/api/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...data })
-      });
-      return await res.json();
-    }
-
-    window.onload = function() {
-      if (serverEmail && !serverTgId) {
-        const emailElem = document.getElementById('emailInput');
-        if (emailElem) emailElem.value = serverEmail;
-      }
-
-      if (serverTgId) {
-        currentIdentifier = 'TG:' + serverTgId;
-        localStorage.setItem('akeront_reader_id', currentIdentifier);
-        showLoader();
-        loadLibrary(currentIdentifier);
-        return;
-      }
-
-      const savedId = localStorage.getItem('akeront_reader_id');
-      if (savedId) {
-        currentIdentifier = savedId;
-        showLoader();
-        loadLibrary(savedId);
-      }
-    };
-
-    function showLoader() {
-      document.getElementById('authBlock').classList.add('hidden');
-      document.getElementById('loaderBlock').classList.remove('hidden');
-    }
-
-    function hideLoader() {
-      document.getElementById('loaderBlock').classList.add('hidden');
-    }
-
-    async function loadLibrary(identifier) {
-      try {
-        const books = await callApi('getUserBooks', { identifier });
-        hideLoader();
-        renderBooks(books);
-      } catch (err) {
-        hideLoader();
-        document.getElementById('authBlock').classList.remove('hidden');
-        showStatus('Ошибка подключения к базе');
-      }
-    }
-
-    async function requestOtp() {
-      const email = document.getElementById('emailInput').value;
-      if (!email || !email.includes('@')) {
-        showStatus('Введите корректный email');
-        return;
-      }
-      toggleBtn('sendBtn', true, 'Отправка...');
-      showStatus('');
-
-      try {
-        const res = await callApi('sendOtpCode', { email });
-        if (res.success) {
-          document.getElementById('stepEmail').classList.add('hidden');
-          document.getElementById('stepCode').classList.remove('hidden');
-        } else {
-          showStatus(res.message);
-        }
-      } catch (e) {
-        showStatus('Ошибка отправки. Попробуйте снова.');
-      } finally {
-        toggleBtn('sendBtn', false, 'Получить код доступа');
-      }
-    }
-
-    async function confirmOtp() {
-      const email = document.getElementById('emailInput').value;
-      const code = document.getElementById('codeInput').value;
-      if (!code) return;
-
-      toggleBtn('verifyBtn', true, 'Проверка...');
-      showStatus('');
-
-      try {
-        const res = await callApi('verifyOtpAndGetBooks', { email, code });
-        toggleBtn('verifyBtn', false, 'Войти в библиотеку');
-        if (res.success) {
-          currentIdentifier = res.identifier;
-          localStorage.setItem('akeront_reader_id', currentIdentifier);
-          renderBooks(res.books);
-        } else {
-          showStatus(res.message);
-        }
-      } catch (e) {
-        toggleBtn('verifyBtn', false, 'Войти в библиотеку');
-        showStatus('Ошибка проверки кода');
-      }
-    }
-
-    function renderBooks(books) {
-      document.getElementById('authBlock').classList.add('hidden');
-      document.getElementById('libraryBlock').classList.remove('hidden');
-      const container = document.getElementById('booksList');
-      container.innerHTML = '';
-
-      if (serverBookId) {
-        const hasRequestedBook = books && books.some(b => b.driveId === serverBookId || b.slug === serverBookId);
-        if (!hasRequestedBook) {
-          const titleToShow = serverBookTitle || 'Запрошенное произведение';
-          const reqBanner = document.createElement('div');
-          reqBanner.innerHTML = `
-            <div style="background: #252525; border: 1px solid #ff9800; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-              <h3 style="margin: 0 0 10px 0; color: #ff9800; font-size: 16px; text-align: center;">Доступ не найден</h3>
-              <p style="margin: 0 0 12px 0; font-size: 13px; color: #d0d0d0; text-align: left;">
-                У вас пока нет доступа к произведению <b>«${escapeHtml(titleToShow)}»</b>.
-              </p>
-              <button id="btnSendReq" onclick="sendSpecificAccessRequest('${serverBookId}', '${escapeHtml(titleToShow)}')" style="background: #ff9800; color: #000; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%;">
-                ✉️ Запросить доступ у автора
-              </button>
-              <div id="reqStatusMsg" style="margin-top: 10px; font-size: 13px; text-align: center;"></div>
-            </div>
-          `;
-          container.appendChild(reqBanner);
-        }
-      }
-
-      if (!books || books.length === 0) {
-        if (!serverBookId) {
-          container.innerHTML = `
-            <div style="text-align:center; padding: 10px 0;">
-              <p style="color: #aaa; margin-bottom: 15px;">У вас пока нет доступных книг.</p>
-              <a href="https://t.me/Akeront_Bot" style="display: block; padding: 10px; background: #0088cc; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; margin-bottom: 15px;">📲 Запросить через Telegram</a>
-              <div style="margin: 10px 0; color: #666; font-size: 12px;">— ИЛИ —</div>
-              <input type="email" id="reqEmailInput" placeholder="Ваш Email" style="margin-bottom: 8px;">
-              <button onclick="sendWebEmailRequest()" style="background: #28a745;">✉️️ Запросить по Email</button>
-              <p id="reqEmailStatus" style="font-size: 12px; color: #4caf50; margin-top: 8px;"></p>
-            </div>
-          `;
-        }
-        return;
-      }
-
-      const sectionTitle = document.createElement('div');
-      sectionTitle.style.cssText = 'font-size: 14px; color: #888; margin: 15px 0 10px 0; font-weight: 600;';
-      sectionTitle.innerText = 'Ваши доступные книги:';
-      container.appendChild(sectionTitle);
-
-      books.forEach(b => {
-        const card = document.createElement('div');
-        card.className = 'book-card';
-        card.innerHTML = `
-          <div class="book-info">
-            <div class="book-title">${escapeHtml(b.title)}</div>
-            <div class="book-meta">Доступ с: ${b.date || '—'}</div>
-          </div>
-          <button class="read-btn" onclick="openBook('${b.driveId}')">Читать</button>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    async function sendSpecificAccessRequest(bookId, title) {
-      const btn = document.getElementById('btnSendReq');
-      const status = document.getElementById('reqStatusMsg');
-      if (btn) { btn.disabled = true; btn.innerText = 'Отправка запроса...'; }
-
-      const isTg = (currentIdentifier && currentIdentifier.startsWith('TG:')) || serverTgId;
-
-      try {
-        if (isTg) {
-          const activeTgId = serverTgId || currentIdentifier.replace('TG:', '');
-          await callApi('processTelegramRequest', { tg_id: activeTgId, book_id: bookId, book_title: title });
-          if (status) status.innerHTML = '<span style="color: #4caf50; font-weight: bold;">✅ Запрос отправлен! Реквизиты высланы вам в Telegram-бот.</span>';
-          if (btn) btn.style.display = 'none';
-        } else {
-          let userEmail = (currentIdentifier && currentIdentifier.startsWith('EMAIL:')) ? currentIdentifier.replace('EMAIL:', '') : document.getElementById('emailInput')?.value;
-          if (!userEmail) userEmail = prompt('Укажите ваш Email для связи:');
-          if (!userEmail || !userEmail.includes('@')) {
-            if (status) status.innerHTML = '<span style="color:#ff5555;">Укажите корректный Email!</span>';
-            if (btn) { btn.disabled = false; btn.innerText = '✉️ Запросить доступ у автора'; }
-            return;
-          }
-          await callApi('processEmailRequest', { email: userEmail, book_id: bookId, book_title: title });
-          if (status) status.innerHTML = '<span style="color: #4caf50; font-weight: bold;">Запрос отправлен! Инструкция выслана на ваш Email.</span>';
-          if (btn) btn.style.display = 'none';
-        }
-      } catch (err) {
-        if (status) status.innerText = 'Ошибка отправки: ' + err.message;
-        if (btn) { btn.disabled = false; btn.innerText = '✉️ Запросить доступ у автора'; }
-      }
-    }
-
-    async function sendWebEmailRequest() {
-      const email = document.getElementById('reqEmailInput').value;
-      if (!email || !email.includes('@')) { alert('Введите корректный Email'); return; }
-      document.getElementById('reqEmailStatus').innerText = 'Отправка запроса...';
-      try {
-        await callApi('processEmailRequest', { email, book_id: 'vektor-bitiy', book_title: 'Вектор Бытия' });
-        document.getElementById('reqEmailStatus').innerText = 'Запрос отправлен! Инструкция по оплате PayPal выслана вам на Email.';
-      } catch (e) {
-        document.getElementById('reqEmailStatus').innerText = 'Ошибка отправки запроса.';
-      }
-    }
-
-    async function openBook(driveId) {
-      showLoader();
-      try {
-        const res = await callApi('getBookViewerUrl', { identifier: currentIdentifier, book_id: driveId });
-        hideLoader();
-        if (res.success) {
-          if (res.type === 'pdf') {
-            const base64Data = await callApi('getPdfContentBase64', { fileId: res.driveId });
-            openMobilePdfViewer(base64Data);
-          } else {
-            document.getElementById('libraryBlock').classList.add('hidden');
-            document.getElementById('readerBlock').classList.remove('hidden');
-            document.getElementById('iframeContainer').innerHTML = `<iframe src="${res.embedUrl}"></iframe>`;
-          }
-        } else {
-          alert(res.message);
-        }
-      } catch (err) {
-        hideLoader();
-        alert('Ошибка загрузки книги');
-      }
-    }
-
-    function closeReader() {
-      document.getElementById('readerBlock').classList.add('hidden');
-      document.getElementById('iframeContainer').innerHTML = '';
-      document.getElementById('libraryBlock').classList.remove('hidden');
-    }
-
-    function logout() {
-      localStorage.removeItem('akeront_reader_id');
-      location.reload();
-    }
-
-    function showStatus(msg) { document.getElementById('statusMsg').innerText = msg; }
-    function toggleBtn(id, disabled, text) { const btn = document.getElementById(id); if (btn) { btn.disabled = disabled; btn.innerText = text; } }
-    function escapeHtml(text) { if (!text) return ''; return String(text).replace(/[&<>"']/g, function(m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]; }); }
-  </script>
-
-  <!-- Включён PdfViewer.html -->
-  <style>
-    #pdf-viewer-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background-color: #121212; z-index: 99999; overflow-y: auto; overflow-x: hidden; }
-    .pdf-page-canvas { width: 100% !important; height: auto !important; display: block; margin: 0 auto 12px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
-    #pdf-close-btn { position: fixed; top: 15px; right: 15px; z-index: 100000; background: rgba(0, 0, 0, 0.85); color: #fff; border: 1px solid #555; border-radius: 50%; width: 44px; height: 44px; font-size: 22px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    #pdf-loading-indicator { color: #0088cc; text-align: center; padding: 40px 20px; font-size: 16px; }
-  </style>
-
-  <div id="pdf-viewer-overlay" style="display: none;" oncontextmenu="return false;">
-    <button id="pdf-close-btn" onclick="closeMobilePdfViewer()">✕</button>
-    <div id="pdf-loading-indicator">Загрузка страниц произведения...</div>
-    <div id="pdf-pages-container"></div>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    function openMobilePdfViewer(base64Data) {
-      const overlay = document.getElementById('pdf-viewer-overlay');
-      const container = document.getElementById('pdf-pages-container');
-      const loading = document.getElementById('pdf-loading-indicator');
+    // Запрет контекстного меню и горячих клавиш (Ctrl+C, Ctrl+P, Ctrl+S, F12)
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && ['c', 's', 'p', 'u', 'a'].includes(e.key.toLowerCase())) e.preventDefault();
+      if (e.key === 'F12') e.preventDefault();
+    });
 
-      container.innerHTML = '';
-      loading.style.display = 'block';
-      loading.innerText = 'Загрузка страниц произведения...';
-      overlay.style.display = 'block';
+    const urlParams = new URLSearchParams(window.location.search);
+    const pdfUrl = urlParams.get('book') || 'https://hpihtmgbgkcuibssysto.supabase.co/storage/v1/object/public/akeront-media/vektor-bitiy.pdf';
 
-      try {
-        const raw = atob(base64Data);
-        const uint8Array = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) uint8Array[i] = raw.charCodeAt(i);
-
-        pdfjsLib.getDocument({ data: uint8Array }).promise.then(function(pdf) {
-          loading.style.display = 'none';
-          for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-            pdf.getPage(pageNum).then(function(page) {
-              const viewport = page.getViewport({ scale: 2.0 });
-              const canvas = document.createElement('canvas');
-              canvas.className = 'pdf-page-canvas';
-              const context = canvas.getContext('2d');
-              canvas.height = viewport.height;
-              canvas.width = viewport.width;
-              container.appendChild(canvas);
-              page.render({ canvasContext: context, viewport: viewport });
-            });
-          }
-        }).catch(function(err) {
-          loading.style.color = '#ff5555';
-          loading.innerText = 'Ошибка обработки документа: ' + err.message;
-        });
-      } catch (err) {
-        loading.style.color = '#ff5555';
-        loading.innerText = 'Ошибка декодирования файла.';
+    async function requestCode() {
+      const email = document.getElementById('email').value;
+      const res = await fetch('/api/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        document.getElementById('code-block').style.display = 'block';
+        document.getElementById('status').style.color = '#34d399';
+        document.getElementById('status').innerText = 'Код отправлен на ваш Email!';
+      } else {
+        document.getElementById('status').innerText = 'Ошибка отправки кода.';
       }
     }
 
-    function closeMobilePdfViewer() {
-      document.getElementById('pdf-viewer-overlay').style.display = 'none';
-      document.getElementById('pdf-pages-container').innerHTML = '';
+    async function verifyCode() {
+      const email = document.getElementById('email').value;
+      const code = document.getElementById('code').value;
+      const res = await fetch('/api/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+
+      if (res.ok) {
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('reader-screen').style.display = 'flex';
+        renderPdf(pdfUrl);
+      } else {
+        document.getElementById('status').style.color = '#f87171';
+        document.getElementById('status').innerText = 'Неверный код доступа.';
+      }
+    }
+
+    async function renderPdf(url) {
+      const container = document.getElementById('canvas-container');
+      const pdf = await pdfjsLib.getDocument(url).promise;
+
+      for (let num = 1; num <= pdf.numPages; num++) {
+        const page = await pdf.getPage(num);
+        const viewport = page.getViewport({ scale: 1.5 });
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        container.appendChild(canvas);
+      }
     }
   </script>
 </body>
