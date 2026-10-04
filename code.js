@@ -10,16 +10,17 @@ const PORT = process.env.PORT || 10000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Инициализация Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('⚠️ SUPABASE_URL или SUPABASE_KEY не заданы в Environment Variables!');
+  console.error('⚠️ SUPABASE_URL или SUPABASE_KEY не заданы!');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// SMTP Транспорт для отправки кодов (Resend)
+// SMTP Транспорт для Resend
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.resend.com',
   port: parseInt(process.env.SMTP_PORT || '465', 10),
@@ -39,6 +40,7 @@ app.post('/api/request-code', async (req, res) => {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
   try {
+    // Сохраняем код в таблицу access_codes
     const { error: dbError } = await supabase
       .from('access_codes')
       .upsert(
@@ -46,10 +48,14 @@ app.post('/api/request-code', async (req, res) => {
         { onConflict: 'email' }
       );
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      console.error('❌ Ошибка записи в базу Supabase (access_codes):', dbError);
+      return res.status(500).json({ error: `Ошибка базы данных: ${dbError.message}` });
+    }
 
     const mailSender = process.env.SMTP_FROM || 'onboarding@resend.dev';
 
+    // Отправляем письмо через Resend
     await transporter.sendMail({
       from: `Библиотека Akeront <${mailSender}>`,
       to: cleanEmail,
@@ -61,15 +67,17 @@ app.post('/api/request-code', async (req, res) => {
           <div style="background-color: #1e293b; padding: 18px; text-align: center; border-radius: 8px; margin: 20px 0; border: 1px solid #475569;">
             <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #0284c7;">${code}</span>
           </div>
-          <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Если вы не запрашивали доступ, просто проигнорируйте данное письмо.</p>
+          <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Если вы не запрашивали доступ, проигнорируйте письмо.</p>
         </div>
       `
     });
 
+    console.log(`✅ Код ${code} успешно отправлен на ${cleanEmail}`);
     return res.json({ success: true, message: 'Код отправлен' });
+
   } catch (err) {
-    console.error('Ошибка отправки кода:', err);
-    return res.status(500).json({ error: 'Не удалось отправить код доступа' });
+    console.error('❌ Ошибка отправки почты через SMTP:', err);
+    return res.status(500).json({ error: `Ошибка отправки письма: ${err.message}` });
   }
 });
 
@@ -95,11 +103,11 @@ app.post('/api/verify-code', async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    return res.status(500).json({ error: 'Ошибка серверной проверки' });
+    return res.status(500).json({ error: 'Ошибка проверки кода' });
   }
 });
 
-// 3. Каталог произведений с автоматическим скачиванием и конвертацией .docx
+// 3. Каталог книг (Строки берутся НАПРЯМУЮ из БД без любых изменений)
 app.get('/api/books', async (req, res) => {
   try {
     const { data: books, error } = await supabase.from('books').select('*');
@@ -109,30 +117,30 @@ app.get('/api/books', async (req, res) => {
       books.map(async (book) => {
         let prologueHtml = book.description || '';
 
-        // Загружаем .docx файл прямо по ссылке prologue_url без усечений и обрезок
+        // Загрузка .docx напрямую по точному URL из базы
         if (book.prologue_url && book.prologue_url.trim().length > 0) {
           try {
-            const response = await fetch(book.prologue_url.trim());
-            if (response.ok) {
-              const arrayBuffer = await response.arrayBuffer();
+            const docxResponse = await fetch(book.prologue_url.trim());
+            if (docxResponse.ok) {
+              const arrayBuffer = await docxResponse.arrayBuffer();
               const parsed = await mammoth.convertToHtml({ buffer: Buffer.from(arrayBuffer) });
               if (parsed.value) {
                 prologueHtml = parsed.value;
               }
             } else {
-              console.warn(`Не удалось загрузить .docx файл по ссылке (${response.status}): ${book.prologue_url}`);
+              console.warn(`Не удалось загрузить .docx по адресу: ${book.prologue_url}`);
             }
           } catch (e) {
-            console.error(`Ошибка обработки .docx файла для "${book.title}":`, e);
+            console.error(`Ошибка Mammoth для ${book.title}:`, e);
           }
         }
 
         return {
           id: book.id,
           title: book.title,
-          cover_url: book.cover_url,
+          cover_url: book.cover_url, // Берутся точные данные из поля
           prologue_html: prologueHtml,
-          pdf_url: book.pdf_url
+          pdf_url: book.pdf_url       // Берутся точные данные из поля
         };
       })
     );
@@ -140,8 +148,8 @@ app.get('/api/books', async (req, res) => {
     return res.json(processedBooks);
   } catch (err) {
     console.error('Ошибка сервера при получении каталога:', err);
-    return res.status(500).json({ error: 'Не удалось загрузить список книг' });
+    return res.status(500).json({ error: 'Не удалось загрузить каталог' });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Сервер Библиотеки Akeront запущен на порту ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
