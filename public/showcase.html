@@ -5,42 +5,127 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Витрина — Библиотека Akeront</title>
   <style>
-    body { font-family: sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; }
-    .container { max-width: 850px; margin: 0 auto; }
-    .book-card { display: flex; background: #1e293b; border-radius: 12px; margin-bottom: 24px; overflow: hidden; border: 1px solid #334155; }
-    .book-cover { width: 200px; min-width: 200px; object-fit: cover; }
-    .book-info { padding: 24px; display: flex; flex-direction: column; justify-content: space-between; }
-    .book-title { font-size: 1.5rem; margin: 0 0 12px 0; color: #38bdf8; }
-    .prologue { color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; max-height: 200px; overflow-y: auto; margin-bottom: 20px; }
-    .btn-login { background: #0284c7; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; width: fit-content; }
-    .btn-login:hover { background: #0369a1; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header h1 {
+      font-size: 2.2rem;
+      margin: 0 0 10px 0;
+      color: #38bdf8;
+    }
+    .header p {
+      color: #94a3b8;
+      font-size: 1.1rem;
+    }
+    .book-card {
+      display: flex;
+      background: #1e293b;
+      border-radius: 12px;
+      margin-bottom: 28px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+    .book-cover {
+      width: 220px;
+      min-width: 220px;
+      object-fit: cover;
+      background-color: #0284c7;
+    }
+    .book-content {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .book-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 0 0 14px 0;
+      color: #38bdf8;
+    }
+    .book-prologue {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      padding-right: 8px;
+    }
+    .btn-read {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #0284c7;
+      color: white;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      width: fit-content;
+      transition: background 0.2s ease;
+    }
+    .btn-read:hover {
+      background: #0369a1;
+    }
   </style>
 </head>
 <body>
+
   <div class="container">
-    <h1 style="text-align: center; margin-bottom: 40px;">Витрина Библиотеки Akeront</h1>
+    <div class="header">
+      <h1>Витрина Библиотеки Akeront</h1>
+      <p>Авторская проза и исследования — Каталог произведений</p>
+    </div>
+
     <div id="catalog">Загрузка произведений...</div>
   </div>
 
   <script>
     async function loadCatalog() {
-      const res = await fetch('/api/books');
-      const books = await res.json();
-      const catalog = document.getElementById('catalog');
+      const container = document.getElementById('catalog');
+      try {
+        const res = await fetch('/api/books');
+        const books = await res.json();
 
-      catalog.innerHTML = books.map(book => `
-        <div class="book-card">
-          <img class="book-cover" src="${book.cover_url}" alt="${book.title}">
-          <div class="book-info">
-            <div>
-              <h2 class="book-title">${book.title}</h2>
-              <div class="prologue">${book.prologue_html}</div>
+        if (!books || !books.length) {
+          container.innerHTML = '<p style="text-align:center;">Каталог пуст.</p>';
+          return;
+        }
+
+        container.innerHTML = books.map(book => `
+          <div class="book-card">
+            <img class="book-cover" src="${book.cover_url}" alt="${book.title}" onerror="this.src='https://via.placeholder.com/220x330/1e293b/38bdf8?text=Akeront'">
+            <div class="book-content">
+              <div>
+                <h2 class="book-title">${book.title}</h2>
+                <div class="book-prologue">${book.prologue_html}</div>
+              </div>
+              <a href="/index.html?book=${encodeURIComponent(book.pdf_url)}" class="btn-read">
+                🔑 Получить доступ и читать
+              </a>
             </div>
-            <a href="/index.html?book=${encodeURIComponent(book.pdf_url)}" class="btn-login">🔑 Получить доступ и читать</a>
           </div>
-        </div>
-      `).join('');
+        `).join('');
+      } catch (err) {
+        container.innerHTML = '<p style="color:#ef4444; text-align:center;">Ошибка загрузки каталога книг.</p>';
+      }
     }
+
     loadCatalog();
   </script>
 </body>
